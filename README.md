@@ -1743,6 +1743,349 @@ S_estimated = W × X
 
 ---
 
+## Exercise C4.5: Decision Tree Behavior Analysis
+
+### Overview
+
+This exercise explores the behavior of **C4.5 decision trees** (implemented in scikit-learn as `DecisionTreeClassifier` with `criterion='entropy'`) and how the **number of training samples** affects classification accuracy and decision boundary formation.
+
+### Theoretical Background
+
+#### Decision Tree Characteristics
+
+**Partition Strategy**:
+- Decision trees divide the feature space into **hyper-rectangular regions**
+- Each region corresponds to a leaf node with a class prediction
+- Splits are axis-aligned (parallel to feature axes)
+
+**Training Sample Impact**:
+- **Small N_train**: 
+  - Fewer splits → larger rectangular regions
+  - Coarse approximation of decision boundary
+  - Visible rectangular structure in predictions
+  - Risk of underfitting
+  
+- **Large N_train**: 
+  - More splits → smaller, numerous rectangular regions
+  - Finer approximation of decision boundary
+  - Smoother-looking decision regions (though still rectangular)
+  - Better captures complex patterns
+  - Risk of overfitting (if not regularized)
+
+#### C4.5 Algorithm (Entropy-Based)
+
+**Splitting criterion**: Information Gain using entropy
+
+**Entropy** (measure of impurity):
+```
+H(S) = -Σ p_i log₂(p_i)
+```
+Where p_i is the proportion of class i in set S
+
+**Information Gain**:
+```
+IG(S, A) = H(S) - Σ (|S_v|/|S|) × H(S_v)
+```
+Where:
+- S: Current node samples
+- A: Feature to split on
+- S_v: Subset of samples after split on feature A
+
+**Algorithm selects**: Feature and threshold that maximize information gain at each node
+
+### Experimental Setup
+
+#### Synthetic Dataset
+
+**Non-linear decision boundary**:
+```python
+y = sign(-2 × sign(x₁) × |x₁|^(2/3) + 4 × x₂²)
+```
+
+**Characteristics**:
+- Highly non-linear boundary
+- Cannot be separated by simple linear classifier
+- Tests decision tree's ability to approximate complex shapes
+
+**Feature space**: x₁, x₂ ∈ [-1, 1]
+
+**Classes**: 
+- Class -1 (red points)
+- Class +1 (blue points)
+
+#### Experiments with Variable Training Size
+
+**Three training set sizes**:
+1. N_train = 100 (small sample)
+2. N_train = 1,000 (medium sample)
+3. N_train = 10,000 (large sample)
+
+**Test set**: N_test = 20,000 (fixed, for consistent evaluation)
+
+### Implementation
+
+```python
+import random
+import matplotlib.pyplot as plt
+import numpy as np
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.metrics import accuracy_score
+
+def main():
+    # Experiment with different training sizes
+    N_train = [100, 1000, 10000]
+    
+    for n in N_train:
+        # Generate training data
+        x_train = np.array([
+            (random.uniform(-1, 1), random.uniform(-1, 1)) 
+            for _ in range(n)
+        ])
+        
+        # True labels (non-linear boundary)
+        y_train = np.sign(
+            -2 * np.sign(x_train[:, 0]) * 
+            np.abs(x_train[:, 0])**(2/3) + 
+            4 * x_train[:, 1]**2
+        )
+        
+        # Visualize training data
+        colors = ['red' if z == -1 else 'blue' for z in y_train]
+        plt.figure(figsize=(10, 10), num='Training Data')
+        plt.scatter(x_train[:, 0], x_train[:, 1], c=colors, alpha=0.6)
+        plt.xlabel('x₁')
+        plt.ylabel('x₂')
+        plt.title(f'Training Data (N = {n})')
+        plt.grid(True)
+        plt.show()
+        
+        # Train C4.5 decision tree (entropy criterion)
+        clf = DecisionTreeClassifier(criterion='entropy')
+        clf.fit(x_train, y_train)
+        
+        # Optional: Visualize tree structure
+        # plt.figure(figsize=(20, 10))
+        # plot_tree(clf, filled=True, 
+        #          feature_names=['x₁', 'x₂'], 
+        #          class_names=['-1', '1'])
+        # plt.show()
+        
+        # Generate test data
+        N_test = 20000
+        x_test = np.array([
+            (random.uniform(-1, 1), random.uniform(-1, 1)) 
+            for _ in range(N_test)
+        ])
+        
+        # Predict on test data
+        y_pred = clf.predict(x_test)
+        
+        # True labels for test data
+        y_true = np.sign(
+            -2 * np.sign(x_test[:, 0]) * 
+            np.abs(x_test[:, 0])**(2/3) + 
+            4 * x_test[:, 1]**2
+        )
+        
+        # Evaluate accuracy
+        accuracy = accuracy_score(y_true, y_pred)
+        print(f"Accuracy with N_train = {n}: {accuracy:.4f}")
+        
+        # Visualize predictions (shows rectangular decision regions)
+        colors = ['red' if z == -1 else 'blue' for z in y_pred]
+        plt.figure(figsize=(10, 10), num='Test Predictions')
+        plt.scatter(x_test[:, 0], x_test[:, 1], c=colors, 
+                   alpha=0.3, s=1)
+        plt.xlabel('x₁')
+        plt.ylabel('x₂')
+        plt.title(f'Decision Tree Predictions (N_train = {n})')
+        plt.grid(True)
+        plt.show()
+
+if __name__ == "__main__":
+    main()
+```
+
+### Expected Observations
+
+#### 1. Training Data Visualization
+
+**All three cases** show the true non-linear decision boundary through the color distribution of training points.
+
+**Observations**:
+- Red and blue regions form a complex, curved boundary
+- The mathematical function creates a specific pattern in the 2D space
+- Boundary is smooth and non-linear (not axis-aligned)
+
+#### 2. Prediction Visualization (Key Insight)
+
+**N_train = 100** (Small Sample):
+- **Appearance**: Large, clearly visible rectangular regions
+- **Decision boundary**: Very coarse approximation
+- **Rectangles**: Easy to see individual rectangular partitions
+- **Accuracy**: Lowest (~60-70% typical)
+- **Interpretation**: Insufficient data to capture boundary complexity
+
+**N_train = 1,000** (Medium Sample):
+- **Appearance**: Smaller rectangles, still somewhat visible
+- **Decision boundary**: Better approximation
+- **Rectangles**: Noticeable but less obvious than N=100
+- **Accuracy**: Moderate (~75-85% typical)
+- **Interpretation**: Captures main patterns, misses fine details
+
+**N_train = 10,000** (Large Sample):
+- **Appearance**: Very small rectangles, appears almost smooth
+- **Decision boundary**: Fine approximation of true boundary
+- **Rectangles**: Hard to see individual partitions (mosaic effect)
+- **Accuracy**: Highest (~85-95% typical)
+- **Interpretation**: Closely follows true non-linear boundary
+
+#### 3. Accuracy Trend
+
+**Expected pattern**:
+```
+Accuracy(N=100) < Accuracy(N=1000) < Accuracy(N=10000)
+```
+
+**Why?**
+- More training samples → more opportunities to learn boundary details
+- Decision tree can create more refined partitions
+- Better generalization to unseen test data
+
+**Limitation**: 
+- Even with large N, rectangular partitions cannot perfectly match smooth curves
+- Asymptotic accuracy limit exists (< 100%)
+
+### Analysis Questions
+
+1. **Why rectangular regions?**
+   - Decision trees use axis-aligned splits (x₁ < threshold or x₂ < threshold)
+   - Each split creates rectangular sub-regions
+   - No diagonal or curved boundaries possible
+
+2. **Why does accuracy improve with more data?**
+   - More samples provide better coverage of feature space
+   - Tree can identify more informative splits
+   - Better statistical estimates of class probabilities in each region
+
+3. **What are the limitations?**
+   - **Axis-aligned constraint**: Cannot efficiently represent diagonal or circular boundaries
+   - **Overfitting risk**: Very deep trees with large N can memorize noise
+   - **Discontinuous boundaries**: Predictions change abruptly at split points
+
+4. **How to improve?**
+   - **Ensemble methods**: Random Forest, Gradient Boosting (multiple trees voting)
+   - **Regularization**: Limit tree depth, minimum samples per leaf
+   - **Feature engineering**: Add polynomial features, interactions
+   - **Alternative models**: Neural networks, SVM with RBF kernel (for smooth boundaries)
+
+### Extensions and Experiments
+
+#### Extension 1: Visualize Tree Structure
+
+Uncomment the tree visualization code to see:
+- Number of nodes (increases with N_train)
+- Depth of tree (increases with N_train)
+- Split decisions at each node
+- Leaf node class distributions
+
+```python
+plt.figure(figsize=(20, 10))
+plot_tree(clf, filled=True, 
+         feature_names=['x₁', 'x₂'], 
+         class_names=['-1', '1'])
+plt.title(f'Decision Tree Structure (N_train = {n})')
+plt.show()
+```
+
+#### Extension 2: Add Tree Regularization
+
+Compare unrestricted tree with regularized versions:
+
+```python
+# Unrestricted (current implementation)
+clf_unrestricted = DecisionTreeClassifier(criterion='entropy')
+
+# Regularized trees
+clf_depth5 = DecisionTreeClassifier(criterion='entropy', max_depth=5)
+clf_samples = DecisionTreeClassifier(criterion='entropy', 
+                                     min_samples_split=100,
+                                     min_samples_leaf=50)
+
+# Train all and compare accuracies
+```
+
+**Expected**: Regularization prevents overfitting with large N_train
+
+#### Extension 3: Compare with Other Algorithms
+
+```python
+from sklearn.svm import SVC
+from sklearn.neural_network import MLPClassifier
+
+# SVM with RBF kernel (smooth boundaries)
+svm = SVC(kernel='rbf', gamma='scale')
+
+# Neural network (flexible boundaries)
+nn = MLPClassifier(hidden_layer_sizes=(50, 50), max_iter=1000)
+
+# Compare accuracies and visualize decision boundaries
+```
+
+**Question**: Which algorithm best approximates the true non-linear boundary?
+
+#### Extension 4: Feature Space Complexity
+
+Try different mathematical boundaries:
+
+```python
+# Linear (easy for decision tree)
+y = sign(x₁ + x₂)
+
+# Circular (hard for decision tree, easy for SVM-RBF)
+y = sign(x₁² + x₂² - 0.5)
+
+# XOR (requires multiple splits)
+y = sign(x₁ * x₂)
+```
+
+**Analysis**: How does decision tree accuracy vary with boundary complexity?
+
+### Learning Objectives
+
+1. **Understand decision tree partitioning**: Rectangular regions, axis-aligned splits
+2. **Sample size impact**: More data → finer partitions → better accuracy
+3. **Visualization interpretation**: Connect rectangular structure to tree splits
+4. **Model limitations**: Recognize when axis-aligned splits are insufficient
+5. **Algorithm comparison**: Appreciate trade-offs between different classifiers
+
+### Implementation Tips
+
+**Efficient visualization**:
+```python
+# For large test sets, reduce point size and increase transparency
+plt.scatter(x_test[:, 0], x_test[:, 1], c=colors, 
+           alpha=0.1, s=0.5)  # Small, transparent points
+```
+
+**Save figures**:
+```python
+plt.savefig(f'decision_boundary_N{n}.png', dpi=300, bbox_inches='tight')
+```
+
+**Print tree statistics**:
+```python
+print(f"Tree depth: {clf.get_depth()}")
+print(f"Number of leaves: {clf.get_n_leaves()}")
+print(f"Number of nodes: {clf.tree_.node_count}")
+```
+
+### Conclusion
+
+This exercise demonstrates a fundamental property of decision trees: their **piecewise constant** nature through **rectangular partitioning**. While increasing training samples improves approximation quality, the axis-aligned constraint remains. Understanding these limitations guides informed model selection for real-world healthcare applications.
+
+---
+
 ## Summary
 
 This laboratory course covers a comprehensive range of ICT applications in healthcare:
@@ -1752,6 +2095,7 @@ This laboratory course covers a comprehensive range of ICT applications in healt
 3. **Classification** (Lab 4): Diagnostic decision trees
 4. **Statistical Analysis** (Lab 5): Medical test evaluation and comparison
 5. **Signal Processing** (Lab 6): Brain signal analysis and artifact removal
+6. **Decision Tree Analysis** (Exercise C4.5): Understanding classifier behavior and limitations
 
 **Skills developed**:
 - Python programming (Pandas, NumPy, Scikit-learn, Matplotlib)
